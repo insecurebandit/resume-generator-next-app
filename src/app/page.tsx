@@ -1,103 +1,177 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+import { Header } from './components/Header';
+import { PersonalInfo } from './components/PersonalInfo';
+import { ProfessionalSummary } from './components/ProfessionalSummary';
+import { WorkExperience } from './components/WorkExperience';
+import { Education } from './components/Education';
+import { FormData } from '../types/form';
+import { validateField, validateForm } from '../utils/validation';
+import { SkillsTags } from './components/SkillsTags';
+import { Preview, generateResumeHtml } from './components/Preview';
+import { useEffect, useRef } from 'react';
+import { db, debouncedSaveFormData } from '../utils/indexedDB';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [formData, setFormData] = useState<FormData>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [progress, setProgress] = useState(0);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleFormUpdate = (field: string, value: any) => {
+    setFormData((prev: FormData) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    // Validate field on update
+    const fieldError = validateField(field, value);
+    if (fieldError) {
+      setErrors((prev) => ({
+        ...prev,
+        [field]: fieldError,
+      }));
+    } else if (errors[field]) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+
+    // Calculate progress based on valid fields
+    const requiredFields = ['name', 'email', 'phone', 'summary', 'experience'];
+    const filledRequiredFields = requiredFields.filter((f) => {
+      const v = (formData as any)[f];
+      return v && String(v).trim() !== '' && !errors[f];
+    });
+
+    const newProgress = Math.round((filledRequiredFields.length / requiredFields.length) * 100);
+    setProgress(newProgress);
+  };
+
+  // Load form data from IndexedDB on mount
+  useEffect(() => {
+    const loadSavedData = async () => {
+      try {
+        const savedData = await db.loadFormData();
+        if (savedData) {
+          setFormData(savedData);
+        }
+      } catch (e) {
+        console.error('Failed to load saved form data:', e);
+      }
+    };
+    loadSavedData();
+  }, []);
+
+  // Save form data to IndexedDB when it changes
+  useEffect(() => {
+    // Don't save empty form data
+    if (Object.keys(formData).length === 0) return;
+    
+    // Save with debounce
+    debouncedSaveFormData(formData);
+  }, [formData]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate all fields
+    const formErrors = validateForm(formData);
+    if (Object.keys(formErrors).length > 0) {
+      setErrors(formErrors);
+
+      // Update progress considering validation errors
+      const requiredFields = ['name', 'email', 'phone', 'summary', 'experience'];
+      const validFields = requiredFields.filter((field) => !formErrors[field]);
+      const newProgress = Math.round((validFields.length / requiredFields.length) * 100);
+      setProgress(newProgress);
+
+      // Scroll to first error (use name attribute selector)
+      const firstFieldName = Object.keys(formErrors)[0];
+      const firstErrorField = document.querySelector(`[name="${firstFieldName}"]`);
+      if (firstErrorField instanceof HTMLElement) {
+        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    // Proceed with form submission
+    try {
+      const html = generateResumeHtml(formData as FormData);
+      // dynamically import html2pdf (client-side); library may need to be installed
+      let html2pdf: any = null;
+      try {
+        // html2pdf may not be installed in the repo; attempt to import dynamically
+        const mod = await import('html2pdf.js');
+        html2pdf = mod && (mod.default || mod);
+      } catch (e) {
+        console.warn('html2pdf.js not installed; falling back to print');
+      }
+
+      const opt = {
+        margin: 10,
+        filename: `${(formData.name || 'resume').replace(/\s+/g,'_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      const container = document.createElement('div');
+      container.style.display = 'block';
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      if (html2pdf) {
+        await html2pdf().set(opt).from(container).save();
+      } else {
+        // fallback: open print preview
+        const w = window.open('', '_blank');
+        if (w) {
+          w.document.write(html);
+          w.document.close();
+          setTimeout(() => w.print(), 300);
+        }
+      }
+      document.body.removeChild(container);
+      // Clear saved data after successful download
+      await db.clearFormData();
+    } catch (err) {
+      console.error('PDF generation failed', err);
+      // fallback: open print preview
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.write(generateResumeHtml(formData as FormData));
+        w.document.close();
+        setTimeout(() => w.print(), 300);
+      }
+    }
+  };
+
+  return (
+    <div className="container">
+      <Header progress={progress} />
+      <div className="main-content">
+        <div className="form-section">
+          <form id="resumeForm" onSubmit={handleSubmit} noValidate>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20 }}>
+              <div>
+                <PersonalInfo formData={formData} onUpdate={handleFormUpdate} errors={errors} />
+                <ProfessionalSummary formData={formData} onUpdate={handleFormUpdate} errors={errors} />
+                <WorkExperience formData={formData} onUpdate={handleFormUpdate} errors={errors} />
+                <Education formData={formData} onUpdate={handleFormUpdate} />
+                <SkillsTags formData={formData} onUpdate={handleFormUpdate} />
+                <div style={{ marginTop: 12 }}>
+                  <button type="submit">Generate Resume</button>
+                </div>
+              </div>
+
+              <aside>
+                <Preview formData={formData} />
+              </aside>
+            </div>
+          </form>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
