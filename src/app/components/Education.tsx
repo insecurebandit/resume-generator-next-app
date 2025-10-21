@@ -5,7 +5,7 @@ import { FormData } from '../../types/form';
 
 interface EducationProps {
   formData: FormData;
-  onUpdate: (field: string, value: any) => void;
+  onUpdate: (field: string, value: unknown) => void;
 }
 
 export function Education({ formData, onUpdate }: EducationProps) {

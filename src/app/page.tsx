@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { PersonalInfo } from './components/PersonalInfo';
 import { ProfessionalSummary } from './components/ProfessionalSummary';
@@ -10,7 +10,6 @@ import { FormData } from '../types/form';
 import { validateField, validateForm } from '../utils/validation';
 import { SkillsTags } from './components/SkillsTags';
 import { Preview, generateResumeHtml } from './components/Preview';
-import { useEffect, useRef } from 'react';
 import { db, debouncedSaveFormData } from '../utils/indexedDB';
 
 export default function Home() {
@@ -18,7 +17,7 @@ export default function Home() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState(0);
 
-  const handleFormUpdate = (field: string, value: any) => {
+  const handleFormUpdate = (field: string, value: unknown) => {
     setFormData((prev: FormData) => ({
       ...prev,
       [field]: value,
@@ -42,8 +41,8 @@ export default function Home() {
     // Calculate progress based on valid fields
     const requiredFields = ['name', 'email', 'phone', 'summary', 'experience'];
     const filledRequiredFields = requiredFields.filter((f) => {
-      const v = (formData as any)[f];
-      return v && String(v).trim() !== '' && !errors[f];
+      const v = (formData as unknown as Record<string, unknown>)[f];
+      return v && String(v as string).trim() !== '' && !errors[f];
     });
 
     const newProgress = Math.round((filledRequiredFields.length / requiredFields.length) * 100);
@@ -101,12 +100,12 @@ export default function Home() {
     try {
       const html = generateResumeHtml(formData as FormData);
       // dynamically import html2pdf (client-side); library may need to be installed
-      let html2pdf: any = null;
+  let html2pdf: unknown = null;
       try {
         // html2pdf may not be installed in the repo; attempt to import dynamically
         const mod = await import('html2pdf.js');
-        html2pdf = mod && (mod.default || mod);
-      } catch (e) {
+  html2pdf = (mod && (mod.default || mod));
+      } catch {
         console.warn('html2pdf.js not installed; falling back to print');
       }
 
@@ -121,8 +120,15 @@ export default function Home() {
       container.style.display = 'block';
       container.innerHTML = html;
       document.body.appendChild(container);
-      if (html2pdf) {
-        await html2pdf().set(opt).from(container).save();
+      if (typeof html2pdf === 'function') {
+        // html2pdf is a function factory; narrow to function then call
+        // Define minimal chain interface to avoid using `any`
+        type Html2PdfChain = {
+          set: (opts: unknown) => Html2PdfChain;
+          from: (el: HTMLElement) => Html2PdfChain;
+          save: () => Promise<void>;
+        };
+  await (html2pdf as unknown as () => Html2PdfChain)().set(opt).from(container).save();
       } else {
         // fallback: open print preview
         const w = window.open('', '_blank');

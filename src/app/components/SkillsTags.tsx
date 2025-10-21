@@ -5,7 +5,7 @@ import { FormData } from '../../types/form';
 
 interface SkillsTagsProps {
   formData: FormData;
-  onUpdate: (field: string, value: any) => void;
+  onUpdate: (field: string, value: unknown) => void;
 }
 
 export function SkillsTags({ formData, onUpdate }: SkillsTagsProps) {

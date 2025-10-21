@@ -83,13 +83,13 @@ async function clearFormData(): Promise<void> {
 }
 
 // Create debounced save function
-function debounce<T extends (...args: any[]) => Promise<void>>(
-  func: T,
+function debounce<Args extends unknown[]>(
+  func: (...args: Args) => Promise<void>,
   wait: number
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   let timeout: NodeJS.Timeout;
 
-  return (...args: Parameters<T>) => {
+  return (...args: Args) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => {
       func(...args).catch(console.error);

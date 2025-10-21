@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { FormData } from '../../types/form';
 
 interface PersonalInfoProps {
@@ -185,6 +185,7 @@ export function PersonalInfo({ formData, onUpdate, errors }: PersonalInfoProps) 
 
         {photoPreview && !cropperVisible && (
           <div className="photo-preview">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={photoPreview} 
               alt="Profile preview"
