@@ -167,7 +167,7 @@ export default function Home() {
                 <Education formData={formData} onUpdate={handleFormUpdate} />
                 <SkillsTags formData={formData} onUpdate={handleFormUpdate} />
                 <div style={{ marginTop: 12 }}>
-                  <button type="submit">Generate Resume</button>
+                  <button type="submit" className = "generate-btn">Generate Resume</button>
                 </div>
               </div>
 

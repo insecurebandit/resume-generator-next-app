@@ -48,7 +48,7 @@ export function SkillsTags({ formData, onUpdate }: SkillsTagsProps) {
             onKeyDown={onKeyDown}
             placeholder="Add a skill and press Enter"
           />
-          <button type="button" onClick={addSkill}>Add</button>
+          <button type="button" onClick={addSkill} className = "add-btn">Add</button>
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
